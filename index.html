@@ -78,6 +78,11 @@
             border-color: #1a2980;
         }
 
+        textarea:disabled {
+            background: #f1f5f9;
+            cursor: not-allowed;
+        }
+
         button {
             background: linear-gradient(135deg, #1a2980, #26d0ce);
             color: white;
@@ -144,6 +149,18 @@
             font-weight: 500;
         }
 
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
         @media (max-width: 480px) {
             .container {
                 padding: 1.5rem;
@@ -171,6 +188,7 @@
         </div>
 
         <label for="text" class="visually-hidden">Text to analyze</label>
+
         <textarea
             id="text"
             placeholder="Enter your text here to analyze its sentiment..."
@@ -189,26 +207,18 @@
         <div id="result" role="status" aria-live="polite"></div>
     </main>
 
-    <style>
-        .visually-hidden {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            padding: 0;
-            margin: -1px;
-            overflow: hidden;
-            clip: rect(0, 0, 0, 0);
-            white-space: nowrap;
-            border: 0;
-        }
-    </style>
-
     <script>
+        const REQUEST_TIMEOUT = 15000;
+
         async function analyzeSentiment() {
             const textInput = document.getElementById('text');
             const result = document.getElementById('result');
             const button = document.getElementById('analyze-button');
             const text = textInput.value.trim();
+
+            if (button.disabled) {
+                return;
+            }
 
             if (!text) {
                 result.className = 'neutral';
@@ -218,7 +228,17 @@
                 return;
             }
 
+            const controller = new AbortController();
+            let timedOut = false;
+
+            const timeoutId = setTimeout(() => {
+                timedOut = true;
+                controller.abort();
+            }, REQUEST_TIMEOUT);
+
             button.disabled = true;
+            textInput.disabled = true;
+
             result.style.display = 'block';
             result.className = 'neutral';
             result.replaceChildren();
@@ -244,7 +264,8 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ text })
+                    body: JSON.stringify({ text }),
+                    signal: controller.signal
                 });
 
                 if (!response.ok) {
@@ -252,19 +273,43 @@
                 }
 
                 const data = await response.json();
+
                 const label = String(data.label || '').toLowerCase();
                 const scores = data.scores;
                 const validLabels = ['positive', 'negative', 'neutral'];
-                const scoreKeys = ['pos', 'neg', 'neu', 'compound'];
 
                 if (
                     !validLabels.includes(label) ||
                     !scores ||
-                    !scoreKeys.every(
-                        key => Number.isFinite(scores[key])
-                    )
+                    !Number.isFinite(scores.pos) ||
+                    !Number.isFinite(scores.neg) ||
+                    !Number.isFinite(scores.neu) ||
+                    !Number.isFinite(scores.compound)
                 ) {
                     throw new Error('Invalid response from server');
+                }
+
+                // Validate documented score ranges.
+                const percentageKeys = ['pos', 'neg', 'neu'];
+
+                const invalidPercentage = percentageKeys.some(
+                    key => scores[key] < 0 || scores[key] > 1
+                );
+
+                if (
+                    invalidPercentage ||
+                    scores.compound < -1 ||
+                    scores.compound > 1
+                ) {
+                    throw new Error('Sentiment scores are outside valid ranges');
+                }
+
+                // Ignore a result if the input has changed.
+                if (textInput.value.trim() !== text) {
+                    result.className = 'neutral';
+                    result.textContent =
+                        'Your text changed. Please analyze it again.';
+                    return;
                 }
 
                 const icons = {
@@ -323,10 +368,21 @@
                 console.error('Sentiment analysis failed:', error);
 
                 result.className = 'negative';
-                result.textContent =
-                    'Unable to analyze sentiment. Please check your connection and try again.';
+
+                if (timedOut) {
+                    result.textContent =
+                        'Analysis timed out. Please try again.';
+                } else if (error.name === 'AbortError') {
+                    result.textContent =
+                        'The analysis request was cancelled. Please try again.';
+                } else {
+                    result.textContent =
+                        'Unable to analyze sentiment. Please check your connection and try again.';
+                }
             } finally {
+                clearTimeout(timeoutId);
                 button.disabled = false;
+                textInput.disabled = false;
             }
         }
     </script>
