@@ -159,6 +159,17 @@ Contributions are welcome! Feel free to:
 - Submit pull requests
 - Share feature ideas
 
+## 🧰 Troubleshooting
+
+### Java Compilation or Startup Errors
+
+- **`javac` is not recognized:** Install JDK 17 or later and make sure the JDK's `bin` directory is included in your system's `PATH`.
+- **Port 5000 is already in use:** Stop the process using port 5000 before starting the application again.
+- **Startup script won't run on macOS/Linux:** Make the script executable with `chmod +x start.sh`, then run it using `./start.sh`.
+- **Application doesn't load:** Confirm that the Java server started successfully, then open `http://localhost:5000` in your browser.
+
+If the issue persists, check the terminal output for error messages before trying again.
+
 ## 📝 License
 
 This project is open source and available under the MIT License.
