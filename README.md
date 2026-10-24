@@ -176,6 +176,8 @@ This project is open source and available under the MIT License.
 
 ---
 
-**Built with ❤️ by PRABANSHAN**
+---
+
+**Developed as a collaborative project.**
 
 ⭐ If you find this useful, please consider giving it a star!
